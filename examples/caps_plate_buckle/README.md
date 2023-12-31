@@ -1,0 +1,1 @@
+https://eng.libretexts.org/Under_Construction/Aerospace_Structures_(Johnson)/11%3A_Buckling_of_columns_and_plates/11.01%3A_Compression_buckling_of_thin_rectangular_plates

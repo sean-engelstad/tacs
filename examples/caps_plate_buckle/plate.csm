@@ -1,0 +1,29 @@
+despmtr length 1.0
+despmtr width 1.0
+
+box -length/2 -width/2 0.0 length width 0.0
+select face
+attribute capsGroup $plate
+
+select edge 1
+attribute capsLoad $Xn
+select edge 2
+attribute capsLoad $Yn
+select edge 3
+attribute capsLoad $Xp
+select edge 4
+attribute capsLoad $Yp
+
+select node 1
+attribute capsConstraint $nn
+select node 2
+attribute capsConstraint $np
+select node 3
+attribute capsConstraint $pn
+select node 4
+attribute capsConstraint $pp
+
+select body
+attribute capsAIM $tacsAIM;egadsTessAIM
+end
+||
