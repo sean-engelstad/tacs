@@ -2625,23 +2625,12 @@ TACSBladeStiffenedShellConstitutive::computeCriticalLocalAxialLoadSens(
 
 TacsScalar TACSBladeStiffenedShellConstitutive::computeCriticalShearLoad(
     TacsScalar D1, TacsScalar D2, TacsScalar D3, TacsScalar L) {
-  double ks = 50.0;
-  TacsScalar xi = sqrt(D1 * D2) / D3;
+  TacsScalar xi = sqrt(D1 * D2) / D3; // 1 / Dstar
 
-  TacsScalar N12_crit_1 =
-      (4.0 / (L * L)) * sqrt(D3 * D1 * xi) * (8.125 + 5.045 / xi);
-  TacsScalar N12_crit_2 =
-      (4.0 / (L * L)) * sqrt(D1 * D3) * (11.7 + 0.532 * xi + 0.938 * xi * xi);
-
-  TacsScalar N12_min = 0.0;
-  if (TacsRealPart(N12_crit_1) < TacsRealPart(N12_crit_2)) {
-    N12_min = N12_crit_1;
-  } else {
-    N12_min = N12_crit_2;
-  }
-
-  TacsScalar N12_diff = fabs(N12_crit_1 - N12_crit_2);
-  TacsScalar N12_crit = N12_min - log(1.0 + exp(-ks * N12_diff)) / ks;
+  double pi2 = M_PI * M_PI;
+  TacsScalar Dprod = pow(D1 * pow(D2,3), 0.25);
+  TacsScalar norm_const = pi2 * Dprod / (L * L);
+  TacsScalar N12_crit = norm_const * (2.025 + 0.953 / xi);
 
   return N12_crit;
 }
@@ -2650,53 +2639,20 @@ TacsScalar TACSBladeStiffenedShellConstitutive::computeCriticalShearLoadSens(
     const TacsScalar D1, const TacsScalar D2, const TacsScalar D3,
     const TacsScalar L, TacsScalar* D1Sens, TacsScalar* D2Sens,
     TacsScalar* D3Sens, TacsScalar* LSens) {
-  TacsScalar L2 = L * L;
-  TacsScalar L3 = L2 * L;
-  TacsScalar D32 = D3 * D3;
   TacsScalar root = sqrt(D1 * D2);
   TacsScalar xi = root / D3;
+  TacsScalar Dprod = pow(D1 * pow(D2,3), 0.25);
+  double pi2 = M_PI * M_PI;
+  TacsScalar norm_const = pi2 * Dprod / (L * L);
 
-  TacsScalar N12CritVals[2];
-  N12CritVals[0] = -(4.0 / L2) * sqrt(D3 * D1 * xi) * (8.125 + 5.045 / xi);
-  N12CritVals[1] =
-      -(4.0 / L2) * sqrt(D1 * D3) * (11.7 + 0.532 * xi + 0.938 * xi * xi);
+  TacsScalar N12crit = norm_const * (2.025 + 0.953 / xi);
 
-  TacsScalar N12Crit, N12CritSens[2];
-  N12Crit = ksAggregationSens(N12CritVals, 2, 50., N12CritSens);
-  N12Crit *= -1.0;
+  *D1Sens = 0.25 / D1 * N12crit + norm_const * (-0.5 / D1 * 0.953 / xi) ;
+  *D2Sens = 0.75 / D2 * N12crit + norm_const * (-0.5 / D2 * 0.953 / xi);
+  *D3Sens = norm_const * 0.953 / xi / D3;
+  *LSens = -2.0 * N12crit / L;
 
-  TacsScalar dN12Crit1_dD1 =
-      sqrt(D1 * root) * (5.045 * D3 + 24.375 * root) / (D1 * L2 * root);
-  TacsScalar dN12Crit2_dD1 =
-      sqrt(D1 * D3) * (5.628 * D1 * D2 + 23.4 * D32 + 2.128 * D3 * root) /
-      (D1 * D32 * L2);
-
-  *D1Sens = dN12Crit1_dD1 * N12CritSens[0] + dN12Crit2_dD1 * N12CritSens[1];
-
-  TacsScalar dN12Crit1_dD2 =
-      sqrt(D1 * root) * (-5.045 * D3 + 8.125 * root) / (D2 * L2 * root);
-  TacsScalar dN12Crit2_dD2 =
-      sqrt(D1 * D3) * (3.752 * D1 * D2 + 1.064 * D3 * root) / (D2 * D32 * L2);
-
-  *D2Sens = dN12Crit1_dD2 * N12CritSens[0] + dN12Crit2_dD2 * N12CritSens[1];
-
-  TacsScalar dN12Crit1_dD3 = 20.18 * sqrt(D1 * root) / (L2 * root);
-  TacsScalar dN12Crit2_dD3 =
-      sqrt(D1 * D3) * (-5.628 * D1 * D2 + 23.4 * D32 - 1.064 * D3 * root) /
-      (D32 * D3 * L2);
-
-  *D3Sens = dN12Crit1_dD3 * N12CritSens[0] + dN12Crit2_dD3 * N12CritSens[1];
-
-  TacsScalar dN12Crit1_dL =
-      sqrt(D1 * root) * (-40.36 * D3 - 65.0 * root) / (L3 * root);
-
-  TacsScalar dN12Crit2_dL =
-      sqrt(D1 * D3) * (-7.504 * D1 * D2 - 93.6 * D32 - 4.256 * D3 * root) /
-      (D32 * L3);
-
-  *LSens = dN12Crit1_dL * N12CritSens[0] + dN12Crit2_dL * N12CritSens[1];
-
-  return N12Crit;
+  return N12crit;
 }
 
 // Test that the derivatives computed by computeCriticalShearLoadSens are
