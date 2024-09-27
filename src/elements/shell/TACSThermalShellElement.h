@@ -41,6 +41,21 @@ class TACSThermalShellElement : public TACSElement {
 
     con = _con;
     con->incref();
+
+    // For linear models, we'll need to switch to a nonlinear implementation to
+    // capture geometric effects
+    if (typeid(model) == typeid(TACSShellLinearModel)) {
+      nlElem = new TACSShellElement<quadrature, basis, director,
+                                    TACSShellNonlinearModel>(transform, con);
+    } else if (typeid(model) == typeid(TACSShellInplaneLinearModel)) {
+      nlElem =
+          new TACSShellElement<quadrature, basis, director,
+                               TACSShellInplaneNonlinearModel>(transform, con);
+    }
+    // For nonlinear models we can use the current class instance
+    else {
+      nlElem = this;
+    }
   }
 
   ~TACSThermalShellElement() {
@@ -50,6 +65,11 @@ class TACSThermalShellElement : public TACSElement {
 
     if (con) {
       con->decref();
+    }
+
+    // free nonlinear element pointer
+    if (nlElem != this) {
+      delete nlElem;
     }
   }
 
@@ -67,6 +87,17 @@ class TACSThermalShellElement : public TACSElement {
   double getQuadratureWeight(int n) {
     return quadrature::getQuadratureWeight(n);
   }
+
+  void setComplexStepGmatrix(bool complexStepFlag) {
+    complexStepGmatrix = complexStepFlag;
+#ifndef TACS_USE_COMPLEX  // real mode
+    printf(
+        "Warning : the routine setComplexStepGmatrix on shell elements doesn't "
+        "do anything in real mode.");
+#endif  // TACS_USE_COMPLEX
+  };
+
+  bool getComplexStepGmatrix() { return complexStepGmatrix; };
 
   double getQuadraturePoint(int n, double pt[]) {
     return quadrature::getQuadraturePoint(n, pt);
@@ -160,6 +191,7 @@ class TACSThermalShellElement : public TACSElement {
 
   TACSShellTransform *transform;
   TACSShellConstitutive *con;
+  TACSElement *nlElem;
 };
 
 /*
@@ -762,18 +794,81 @@ void TACSThermalShellElement<quadrature, basis, director, model>::getMatType(
              sizeof(TacsScalar));
   TacsScalar alpha, beta, gamma;
   alpha = beta = gamma = 0.0;
+
+  // prelim buckling states
+  TacsScalar *path;
+  // Create dummy residual vector
+  TacsScalar res[vars_per_node * num_nodes];
+  memset(res, 0, vars_per_node * num_nodes * sizeof(TacsScalar));
+
+  dh = 1e-4;  // default for without override
+  double dh_mag = 1e-4;
+
+  bool _complexStepGmatrix = getComplexStepGmatrix();
+
+#ifdef TACS_USE_COMPLEX
+  if (_complexStepGmatrix) {
+    dh_mag = 1e-30;
+    dh = TacsScalar(0.0, dh_mag);
+  }
+#endif  // TACS_USE_COMPLEX
+  
+
   // Set alpha or gamma based on if this is a stiffness or mass matrix
   if (matType == TACS_STIFFNESS_MATRIX) {
     alpha = 1.0;
   } else if (matType == TACS_MASS_MATRIX) {
     gamma = 1.0;
   } else {  // TACS_GEOMETRIC_STIFFNESS_MATRIX
-    // Not implemented
+    // compute norm for normalizing path vec
+    norm = 0.0;
+    for (int i = 0; i < vars_per_node * num_nodes; i++) {
+      norm += vars[i] * vars[i];
+    }
+
+    if (TacsRealPart(norm) == 0.0) {
+      norm = 1.0;
+    } else {
+      norm = sqrt(norm);
+    }
+
+    // Central difference the tangent stiffness matrix
+    alpha = 0.5 * norm / dh_mag;
+
+    // fwd step
+    path = new TacsScalar[vars_per_node * num_nodes];
+    for (int i = 0; i < vars_per_node * num_nodes; i++) {
+      path[i] = dh * vars[i] / norm;
+    }
+
+    nlElem->addJacobian(elemIndex, time, alpha, beta, gamma, Xpts, path, vars,
+                        vars, res, mat);
+
+    // bwd step
+    for (int i = 0; i < vars_per_node * num_nodes; i++) {
+      path[i] = -dh * vars[i] / norm;
+    }
+
+    nlElem->addJacobian(elemIndex, time, -alpha, beta, gamma, Xpts, path, vars,
+                        vars, res, mat);
+
+    // rescale by 1.0/i if complex_step_override is on
+#ifdef TACS_USE_COMPLEX
+    if (_complexStepGmatrix) {
+      // take imaginary part of the element matrix
+      for (int i = 0; i < vars_per_node * num_nodes * vars_per_node * num_nodes;
+           i++) {
+        mat[i] = TacsScalar(TacsImagPart(mat[i]), 0.0);
+      }
+    }
+#endif  // TACS_USE_COMPLEX
+
+    delete[] path;
     return;
   }
-  // Create dummy residual vector
-  TacsScalar res[vars_per_node * num_nodes];
-  memset(res, 0, vars_per_node * num_nodes * sizeof(TacsScalar));
+  // Create dummy residual vector (Sean commented out)
+  // TacsScalar res[vars_per_node * num_nodes];
+  // memset(res, 0, vars_per_node * num_nodes * sizeof(TacsScalar));
   // Add appropriate Jacobian to matrix
   addJacobian(elemIndex, time, alpha, beta, gamma, Xpts, vars, vars, vars, res,
               mat);
