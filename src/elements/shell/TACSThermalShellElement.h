@@ -34,6 +34,8 @@ class TACSThermalShellElement : public TACSElement {
   // The thermal degree of freedom. This comes last
   static const int thermal_dof = vars_per_node - 1;
 
+  bool complexStepGmatrix = false;
+
   TACSThermalShellElement(TACSShellTransform *_transform,
                           TACSShellConstitutive *_con) {
     transform = _transform;
