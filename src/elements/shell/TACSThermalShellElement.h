@@ -34,7 +34,7 @@ class TACSThermalShellElement : public TACSElement {
   // The thermal degree of freedom. This comes last
   static const int thermal_dof = vars_per_node - 1;
 
-  bool complexStepGmatrix = false;
+  // bool complexStepGmatrix = false;
 
   TACSThermalShellElement(TACSShellTransform *_transform,
                           TACSShellConstitutive *_con) {
@@ -90,16 +90,16 @@ class TACSThermalShellElement : public TACSElement {
     return quadrature::getQuadratureWeight(n);
   }
 
-  void setComplexStepGmatrix(bool complexStepFlag) {
-    complexStepGmatrix = complexStepFlag;
-#ifndef TACS_USE_COMPLEX  // real mode
-    printf(
-        "Warning : the routine setComplexStepGmatrix on shell elements doesn't "
-        "do anything in real mode.");
-#endif  // TACS_USE_COMPLEX
-  };
+//   void setComplexStepGmatrix(bool complexStepFlag) {
+//     complexStepGmatrix = complexStepFlag;
+// #ifndef TACS_USE_COMPLEX  // real mode
+//     printf(
+//         "Warning : the routine setComplexStepGmatrix on shell elements doesn't "
+//         "do anything in real mode.");
+// #endif  // TACS_USE_COMPLEX
+//   };
 
-  bool getComplexStepGmatrix() { return complexStepGmatrix; };
+//   bool getComplexStepGmatrix() { return complexStepGmatrix; };
 
   double getQuadraturePoint(int n, double pt[]) {
     return quadrature::getQuadraturePoint(n, pt);
@@ -803,17 +803,18 @@ void TACSThermalShellElement<quadrature, basis, director, model>::getMatType(
   TacsScalar res[vars_per_node * num_nodes];
   memset(res, 0, vars_per_node * num_nodes * sizeof(TacsScalar));
 
+  TacsScalar dh, norm;
   dh = 1e-4;  // default for without override
   double dh_mag = 1e-4;
 
-  bool _complexStepGmatrix = getComplexStepGmatrix();
+//   bool _complexStepGmatrix = getComplexStepGmatrix();
 
-#ifdef TACS_USE_COMPLEX
-  if (_complexStepGmatrix) {
-    dh_mag = 1e-30;
-    dh = TacsScalar(0.0, dh_mag);
-  }
-#endif  // TACS_USE_COMPLEX
+// #ifdef TACS_USE_COMPLEX
+//   if (_complexStepGmatrix) {
+//     dh_mag = 1e-30;
+//     dh = TacsScalar(0.0, dh_mag);
+//   }
+// #endif  // TACS_USE_COMPLEX
   
 
   // Set alpha or gamma based on if this is a stiffness or mass matrix
@@ -855,15 +856,15 @@ void TACSThermalShellElement<quadrature, basis, director, model>::getMatType(
                         vars, res, mat);
 
     // rescale by 1.0/i if complex_step_override is on
-#ifdef TACS_USE_COMPLEX
-    if (_complexStepGmatrix) {
-      // take imaginary part of the element matrix
-      for (int i = 0; i < vars_per_node * num_nodes * vars_per_node * num_nodes;
-           i++) {
-        mat[i] = TacsScalar(TacsImagPart(mat[i]), 0.0);
-      }
-    }
-#endif  // TACS_USE_COMPLEX
+// #ifdef TACS_USE_COMPLEX
+//     if (_complexStepGmatrix) {
+//       // take imaginary part of the element matrix
+//       for (int i = 0; i < vars_per_node * num_nodes * vars_per_node * num_nodes;
+//            i++) {
+//         mat[i] = TacsScalar(TacsImagPart(mat[i]), 0.0);
+//       }
+//     }
+// #endif  // TACS_USE_COMPLEX
 
     delete[] path;
     return;
